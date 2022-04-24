@@ -1,30 +1,65 @@
 import sys
-import requests
+import json
+import parser
+import job
+import logging
+from util import to_json
 
-http_header = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.92 Safari/537.36',
-    'Referer': 'https://www.104.com.tw/jobs/search/'
-}
-
-parameters = {
-    "ro":0,                 
-    'jobcat':2003000000     # Job type
-}
-
-url_104 = "https://www.104.com.tw/jobs/search/list?"
-
-# res = requests.get('https://www.104.com.tw/jobs/search/list?',params=parameters)
-res = requests.get(
-    # url='https://www.104.com.tw/jobs/search/list?ro=0&jobcat=2003000000&expansionType=area%2Cspec%2Ccom%2Cjob%2Cwf%2Cwktm&order=16&asc=0&page=2&mode=s&jobsource=2018indexpoc&langFlag=0&langStatus=0&recommendJob=1&hotJob=1',
-    url = url_104,
-    headers=http_header,
-    params=parameters
+logging.basicConfig(
+    filemode="a+",
+    filename="crawler.log",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    level=logging.INFO
 )
 
-res.encoding="UTF-8"
+with open('JobCat.json', encoding="utf-8-sig") as jsonfile:
+    job_type = json.load(jsonfile)
 
-sys.stdout = open("result","w+",encoding='UTF-8')
+job_types = list()
+job_list = list()
 
-for i in range(1):
-    for k,v in res.json()['data']['list'][i].items():
-        print("|"+str(k)+"|"+str(v)+"|")
+for i in range(18):
+    for j in job_type[i]['n']:
+        for k in j['n']:
+            job_types.append(k['no'])
+            job_list.append(job.Job(k['no']))
+    
+for i in range(len(job_types)):
+    job_type = job_types[i]
+    res = parser.parse(
+        jobcat = job_type
+    )
+    res.encoding="UTF-8"
+    job_list[i].total_page = int(res.json()['data']['totalPage'])
+    job_list[i].job_cnt = int(res.json()['data']['totalCount'])
+
+total_jobs = list()
+for i in range(len(job_types)):
+    tmp_jobs = list()
+    for page in range(1,job_list[i].total_page+1):
+        res = parser.parse(
+            jobcat = job_list[i].id,
+            page = page
+        )
+        res.encoding="UTF-8"
+        for j in range(len(res.json()['data']['list'])):
+            if res.json()['data']['list'][j] not in tmp_jobs:
+                # total_jobs.append(res.json()['data']['list'][j])
+                tmp_jobs.append(res.json()['data']['list'][j])
+            # for k,v in res.json()['data']['list'][i].items():
+                # print("|"+str(k)+"|"+str(v)+"|")
+                # print(k,v)
+    # job_list[i].jobs = tmp_jobs
+    # print(len(job_list[i].jobs))
+    # print(job_list[i].job_cnt)
+    logging.info('ID: ' + str(job_types[i]))
+    logging.info('Total count on 104: ' + str(job_list[i].job_cnt))
+    logging.info('Total count parserd: ' + str(len(tmp_jobs)))
+    to_json(
+        filename= "./data/"+str(job_types[i])+".json",
+        data=tmp_jobs
+    )
+
+# to_json(
+#     data = total_jobs
+# )
